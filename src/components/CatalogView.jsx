@@ -17,7 +17,9 @@ export function CatalogView({
   searchQuery, 
   onShowToast 
 }) {
-  const [platformFilter, setPlatformFilter] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedSubCategory, setSelectedSubCategory] = useState('All');
+  const [selectedChildCategory, setSelectedChildCategory] = useState('All');
   const [inStockOnly, setInStockOnly] = useState(false);
   
   // Track allocation inputs per product
@@ -33,6 +35,43 @@ export function CatalogView({
   const [selectedRowIds, setSelectedRowIds] = useState(new Set());
   const [sortField, setSortField] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
+
+  // Derive unique categories
+  const categories = useMemo(() => {
+    const set = new Set();
+    products.forEach(p => {
+      if (p.category) set.add(p.category);
+    });
+    return ['All', ...Array.from(set)];
+  }, [products]);
+
+  // Derive subcategories for the selected category
+  const subCategories = useMemo(() => {
+    if (selectedCategory === 'All') return [];
+    const set = new Set();
+    products.forEach(p => {
+      if (p.category === selectedCategory && p.subCategory) {
+        set.add(p.subCategory);
+      }
+    });
+    return ['All', ...Array.from(set)];
+  }, [products, selectedCategory]);
+
+  // Derive child categories for selected category + subCategory
+  const childCategories = useMemo(() => {
+    if (selectedCategory === 'All' || selectedSubCategory === 'All') return [];
+    const set = new Set();
+    products.forEach(p => {
+      if (
+        p.category === selectedCategory && 
+        p.subCategory === selectedSubCategory && 
+        p.childCategory
+      ) {
+        set.add(p.childCategory);
+      }
+    });
+    return ['All', ...Array.from(set)];
+  }, [products, selectedCategory, selectedSubCategory]);
 
   // Handle quantity changes
   const handleQtyChange = (productId, newQty) => {
@@ -71,12 +110,15 @@ export function CatalogView({
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       if (inStockOnly && p.stock <= 0) return false;
-      if (platformFilter !== 'All' && !p.platform.includes(platformFilter)) return false;
+      if (selectedCategory !== 'All' && p.category !== selectedCategory) return false;
+      if (selectedSubCategory !== 'All' && p.subCategory !== selectedSubCategory) return false;
+      if (selectedChildCategory !== 'All' && p.childCategory !== selectedChildCategory) return false;
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         const matchName = p.name.toLowerCase().includes(query);
         const matchSku = p.sku.toLowerCase().includes(query);
-        if (!matchName && !matchSku) return false;
+        const matchCat = (p.categoryPath || []).some(c => c.toLowerCase().includes(query));
+        if (!matchName && !matchSku && !matchCat) return false;
       }
       return true;
     }).sort((a, b) => {
@@ -89,7 +131,16 @@ export function CatalogView({
       }
       return sortDirection === 'asc' ? valA - valB : valB - valA;
     });
-  }, [products, platformFilter, inStockOnly, searchQuery, sortField, sortDirection]);
+  }, [
+    products, 
+    selectedCategory, 
+    selectedSubCategory, 
+    selectedChildCategory, 
+    inStockOnly, 
+    searchQuery, 
+    sortField, 
+    sortDirection
+  ]);
 
   // Handle single add to cart
   const handleSingleAdd = (product) => {
@@ -100,6 +151,13 @@ export function CatalogView({
     }
     onAddToCart(product, qty);
     onShowToast?.(`Added ${qty} units of ${product.sku} to cart`);
+  };
+
+  // Quick category path filter handler from table row clicks
+  const handleFilterByPath = (category, subCategory = 'All', childCategory = 'All') => {
+    setSelectedCategory(category);
+    setSelectedSubCategory(subCategory);
+    setSelectedChildCategory(childCategory);
   };
 
   // Calculate batch totals for selected rows
@@ -116,52 +174,146 @@ export function CatalogView({
     setIsCartOpen(true);
   };
 
-  const platforms = ['All', 'PS5', 'XBOX', 'SWITCH', 'PC'];
+  const isFiltered = selectedCategory !== 'All' || selectedSubCategory !== 'All' || selectedChildCategory !== 'All' || inStockOnly || searchQuery;
 
   return (
     <div className="catalog-container animate-fade-in">
-      {/* Clean Toolbar */}
-      <div className="catalog-toolbar">
-        <div className="filters-group">
-          {/* Platform Category Tabs */}
+      
+      {/* Live Hierarchical Category & Subcategory Navigation Panel */}
+      <div className="category-nav-panel">
+        
+        {/* Level 1: Category Filter Pills */}
+        <div className="category-pills-row">
+          <span className="category-level-label">Category:</span>
           <div className="platform-tab-group">
-            {platforms.map(plat => (
+            {categories.map(cat => (
               <button
-                key={plat}
-                className={`platform-filter-pill ${platformFilter === plat ? 'active' : ''}`}
-                onClick={() => setPlatformFilter(plat)}
+                key={cat}
+                className={`platform-filter-pill ${selectedCategory === cat ? 'active' : ''}`}
+                onClick={() => {
+                  setSelectedCategory(cat);
+                  setSelectedSubCategory('All');
+                  setSelectedChildCategory('All');
+                }}
               >
-                {plat === 'All' ? 'All Categories' : plat}
+                {cat === 'All' ? 'All Products' : cat}
               </button>
             ))}
           </div>
 
-          {/* In-stock toggle */}
-          <label className="checkbox-label" style={{ marginLeft: '0.75rem' }}>
-            <input 
-              type="checkbox" 
-              checked={inStockOnly}
-              onChange={(e) => setInStockOnly(e.target.checked)}
-            />
-            <span>In stock only</span>
-          </label>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <label className="checkbox-label">
+              <input 
+                type="checkbox" 
+                checked={inStockOnly}
+                onChange={(e) => setInStockOnly(e.target.checked)}
+              />
+              <span>In stock only</span>
+            </label>
 
-          {(platformFilter !== 'All' || inStockOnly || searchQuery) && (
-            <button 
-              className="reset-filters-btn" 
-              onClick={() => {
-                setPlatformFilter('All');
-                setInStockOnly(false);
-              }}
-            >
-              Reset filters
-            </button>
+            {isFiltered && (
+              <button 
+                className="reset-filters-btn" 
+                onClick={() => {
+                  setSelectedCategory('All');
+                  setSelectedSubCategory('All');
+                  setSelectedChildCategory('All');
+                  setInStockOnly(false);
+                }}
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Level 2: Sub-Category Pills (e.g. PlayStation -> PlayStation 5) */}
+        {selectedCategory !== 'All' && subCategories.length > 0 && (
+          <div className="category-pills-row sub-pills-row animate-fade-in">
+            <span className="category-level-label">Sub-Category:</span>
+            <div className="platform-tab-group">
+              {subCategories.map(sub => (
+                <button
+                  key={sub}
+                  className={`platform-filter-pill ${selectedSubCategory === sub ? 'active' : ''}`}
+                  onClick={() => {
+                    setSelectedSubCategory(sub);
+                    setSelectedChildCategory('All');
+                  }}
+                >
+                  {sub === 'All' ? `All ${selectedCategory}` : sub}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Level 3: Child Category Pills (e.g. PlayStation 5 -> Games / Consoles / Accessories) */}
+        {selectedSubCategory !== 'All' && childCategories.length > 0 && (
+          <div className="category-pills-row child-pills-row animate-fade-in">
+            <span className="category-level-label">Type:</span>
+            <div className="platform-tab-group">
+              {childCategories.map(child => (
+                <button
+                  key={child}
+                  className={`platform-filter-pill ${selectedChildCategory === child ? 'active' : ''}`}
+                  onClick={() => setSelectedChildCategory(child)}
+                >
+                  {child === 'All' ? `All ${selectedSubCategory}` : child}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Live Active Breadcrumb Bar */}
+        <div className="active-breadcrumb-bar">
+          <span className="breadcrumb-label">Current View:</span>
+          <span 
+            className={`breadcrumb-active-crumb ${selectedCategory === 'All' ? 'current' : ''}`}
+            onClick={() => handleFilterByPath('All')}
+          >
+            Catalog
+          </span>
+
+          {selectedCategory !== 'All' && (
+            <>
+              <span className="breadcrumb-sep">/</span>
+              <span 
+                className={`breadcrumb-active-crumb ${selectedSubCategory === 'All' ? 'current' : ''}`}
+                onClick={() => handleFilterByPath(selectedCategory, 'All', 'All')}
+              >
+                {selectedCategory}
+              </span>
+            </>
           )}
+
+          {selectedSubCategory !== 'All' && (
+            <>
+              <span className="breadcrumb-sep">/</span>
+              <span 
+                className={`breadcrumb-active-crumb ${selectedChildCategory === 'All' ? 'current' : ''}`}
+                onClick={() => handleFilterByPath(selectedCategory, selectedSubCategory, 'All')}
+              >
+                {selectedSubCategory}
+              </span>
+            </>
+          )}
+
+          {selectedChildCategory !== 'All' && (
+            <>
+              <span className="breadcrumb-sep">/</span>
+              <span className="breadcrumb-active-crumb current">
+                {selectedChildCategory}
+              </span>
+            </>
+          )}
+
+          <span className="catalog-stats-inline tabular-nums">
+            ({filteredProducts.length} {filteredProducts.length === 1 ? 'item' : 'items'})
+          </span>
         </div>
 
-        <div className="catalog-stats-badge">
-          Showing <strong className="tabular-nums">{filteredProducts.length}</strong> Products
-        </div>
       </div>
 
       {/* Main Data Table */}
@@ -184,7 +336,7 @@ export function CatalogView({
                     setSortField('name');
                     setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
                   }}
-                  style={{ minWidth: '320px' }}
+                  style={{ minWidth: '340px' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     <span>PRODUCT</span>
@@ -198,7 +350,7 @@ export function CatalogView({
                     setSortField('stock');
                     setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
                   }}
-                  style={{ width: '150px' }}
+                  style={{ width: '130px' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     <span>STOCK</span>
@@ -225,8 +377,15 @@ export function CatalogView({
             <tbody>
               {filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '3rem 1rem', color: '#64748b' }}>
-                    No products match your current filter.
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '3.5rem 1rem', color: '#64748b' }}>
+                    <div>No products found matching your current sub-category filter.</div>
+                    <button 
+                      className="reset-filters-btn" 
+                      onClick={() => handleFilterByPath('All')}
+                      style={{ marginTop: '0.5rem', display: 'inline-block' }}
+                    >
+                      Clear category filters
+                    </button>
                   </td>
                 </tr>
               ) : (
@@ -251,9 +410,37 @@ export function CatalogView({
                       <td>
                         <div className="product-cell-main">
                           <span className="product-title">{prod.name}</span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginTop: '3px' }}>
-                            <span className="sku-badge">{prod.sku}</span>
-                            <span className="platform-pill">{prod.platform}</span>
+                          
+                          {/* Live Sub-Category Breadcrumb Badges */}
+                          <div className="product-category-path">
+                            <span 
+                              className="cat-crumb-btn" 
+                              onClick={() => handleFilterByPath(prod.category)}
+                              title={`Filter by ${prod.category}`}
+                            >
+                              {prod.category}
+                            </span>
+                            <span className="cat-crumb-sep">/</span>
+                            <span 
+                              className="cat-crumb-btn"
+                              onClick={() => handleFilterByPath(prod.category, prod.subCategory)}
+                              title={`Filter by ${prod.category} / ${prod.subCategory}`}
+                            >
+                              {prod.subCategory}
+                            </span>
+                            {prod.childCategory && (
+                              <>
+                                <span className="cat-crumb-sep">/</span>
+                                <span 
+                                  className="cat-crumb-btn child-tag"
+                                  onClick={() => handleFilterByPath(prod.category, prod.subCategory, prod.childCategory)}
+                                  title={`Filter by ${prod.category} / ${prod.subCategory} / ${prod.childCategory}`}
+                                >
+                                  {prod.childCategory}
+                                </span>
+                              </>
+                            )}
+                            <span className="sku-badge" style={{ marginLeft: '4px' }}>{prod.sku}</span>
                           </div>
                         </div>
                       </td>
@@ -332,10 +519,10 @@ export function CatalogView({
         {/* Clean Footer */}
         <div className="table-pagination-footer">
           <div>
-            Total <strong className="tabular-nums">{filteredProducts.length}</strong> items in catalog
+            Showing <strong className="tabular-nums">{filteredProducts.length}</strong> of <strong className="tabular-nums">{products.length}</strong> wholesale products
           </div>
           <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-            All prices in USD • Net 30 Terms
+            All prices wholesale in USD • Net 30 Commercial Terms
           </div>
         </div>
       </div>

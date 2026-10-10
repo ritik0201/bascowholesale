@@ -7,6 +7,7 @@ import { CheckoutView } from './components/CheckoutView';
 import { ConfirmationView } from './components/ConfirmationView';
 import { AdminOrdersView } from './components/AdminOrdersView';
 import { ContactView } from './components/ContactView';
+import { AccountView } from './components/AccountView';
 import { INITIAL_PRODUCTS, INITIAL_ORDERS as MOCK_ORDERS } from './data/mockData';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import './styles/wholesale.css';
@@ -190,6 +191,17 @@ function App() {
             orders={orders}
             onUpdateOrderStatus={handleUpdateOrderStatus}
             onShowToast={showToast}
+          />
+        )}
+
+        {activeTab === 'account' && (
+          <AccountView 
+            onShowToast={showToast}
+            onBackToCatalog={() => setActiveTab('catalog')}
+            onGoToOrders={() => {
+              setIsAdmin(true);
+              setActiveTab('admin-orders');
+            }}
           />
         )}
       </main>

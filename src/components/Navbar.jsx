@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Package, ShoppingCart, Search, ChevronDown, Building2, ShieldCheck, X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Package, ShoppingCart, Search, ChevronDown, Building2, ShieldCheck, X, User } from 'lucide-react';
 
 export function Navbar({ 
   activeTab, 
@@ -12,8 +12,24 @@ export function Navbar({
   setSearchQuery 
 }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef(null);
 
   const totalCartItems = cart.length;
+
+  // Close profile dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setShowProfileMenu(false);
+      }
+    }
+    if (showProfileMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfileMenu]);
 
   return (
     <header className="global-header">
@@ -60,6 +76,13 @@ export function Navbar({
           >
             <ShieldCheck size={14} />
             Orders Console
+          </button>
+          <button 
+            className={`nav-tab-btn ${activeTab === 'account' ? 'active' : ''}`}
+            onClick={() => setActiveTab('account')}
+          >
+            <User size={14} />
+            Account
           </button>
           <button 
             className={`nav-tab-btn ${activeTab === 'contact' ? 'active' : ''}`}
@@ -114,11 +137,12 @@ export function Navbar({
           </span>
         </button>
 
-        {/* User Account Menu */}
-        <div style={{ position: 'relative' }}>
+        {/* User Account Menu with Active Indicator */}
+        <div style={{ position: 'relative' }} ref={profileMenuRef}>
           <div 
-            className="user-profile-badge" 
+            className={`user-profile-badge ${activeTab === 'account' || showProfileMenu ? 'active' : ''}`} 
             onClick={() => setShowProfileMenu(!showProfileMenu)}
+            title="Commercial Account Profile"
           >
             <img 
               src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" 
@@ -129,7 +153,7 @@ export function Navbar({
               <span className="user-name">Apex Corp</span>
               <span className="user-role">Buyer #881</span>
             </div>
-            <ChevronDown size={12} color="#747686" />
+            <ChevronDown size={12} color={activeTab === 'account' ? '#1d4ed8' : '#747686'} />
           </div>
 
           {showProfileMenu && (
@@ -139,48 +163,70 @@ export function Navbar({
                 position: 'absolute',
                 top: 'calc(100% + 8px)',
                 right: 0,
-                width: '240px',
+                width: '260px',
                 backgroundColor: '#ffffff',
                 border: '1px solid var(--color-border-subtle)',
                 borderRadius: 'var(--radius-md)',
                 boxShadow: 'var(--shadow-lg)',
-                padding: '0.75rem',
+                padding: '0.85rem',
                 zIndex: 60,
                 animation: 'fadeIn 0.15s ease'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--color-border-subtle)' }}>
-                <Building2 size={16} color="#1d4ed8" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.75rem', paddingBottom: '0.65rem', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                <Building2 size={18} color="#1d4ed8" />
                 <div>
-                  <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#0b1c30' }}>Apex Distribution</div>
-                  <div style={{ fontSize: '0.6875rem', color: '#64748b' }}>Account WHL-8942-CORP</div>
+                  <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#0b1c30' }}>Apex Gaming & Dist.</div>
+                  <div style={{ fontSize: '0.6875rem', color: '#64748b' }}>Account: WHL-8942-CORP</div>
                 </div>
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#475569', marginBottom: '0.5rem' }}>
-                Payment Terms: <strong style={{ color: '#059669' }}>Net 30 Active</strong>
+
+              <div style={{ fontSize: '0.75rem', color: '#475569', marginBottom: '0.75rem', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Status:</span>
+                  <strong style={{ color: '#059669' }}>Net 30 Active</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Credit Facility:</span>
+                  <strong className="tabular-nums">$250,000.00</strong>
+                </div>
               </div>
-              <button 
-                onClick={() => {
-                  const nextAdmin = !isAdmin;
-                  setIsAdmin(nextAdmin);
-                  if (nextAdmin) setActiveTab('admin-orders');
-                  else setActiveTab('catalog');
-                  setShowProfileMenu(false);
-                }}
-                style={{
-                  width: '100%',
-                  padding: '0.45rem',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  backgroundColor: '#f1f5f9',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: 'var(--radius-sm)',
-                  cursor: 'pointer',
-                  color: '#0b1c30'
-                }}
-              >
-                Switch to {isAdmin ? 'Buyer Portal' : 'Orders Console'}
-              </button>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <button 
+                  onClick={() => {
+                    setActiveTab('account');
+                    setShowProfileMenu(false);
+                  }}
+                  className={`dropdown-item-btn ${activeTab === 'account' ? 'selected' : ''}`}
+                >
+                  <User size={13} />
+                  <span>View Account & Credit Details</span>
+                </button>
+
+                <button 
+                  onClick={() => {
+                    setIsAdmin(true);
+                    setActiveTab('admin-orders');
+                    setShowProfileMenu(false);
+                  }}
+                  className="dropdown-item-btn"
+                >
+                  <ShieldCheck size={13} />
+                  <span>Open Orders Console</span>
+                </button>
+
+                <button 
+                  onClick={() => {
+                    setActiveTab('catalog');
+                    setShowProfileMenu(false);
+                  }}
+                  className="dropdown-item-btn"
+                >
+                  <Package size={13} />
+                  <span>Wholesale Catalog</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
